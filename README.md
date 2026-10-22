@@ -51,7 +51,7 @@ Cài đặt → **Phản hồi và báo lỗi**: nhập mô tả, bấm *Tạo i
 
 - `.gitignore` loại trừ dữ liệu chạy (`config.json`, `history.json`, `session.json`, `*.log`, `updates/`), khoá và chứng chỉ (`*.pfx`, `*.key`, `*.pem`), file môi trường.
 - Trước khi đóng gói, `release.ps1` chạy script quét thông tin nhạy cảm (khoá riêng, token GitHub/AWS, blob DPAPI, mật khẩu trong JSON, email và đường dẫn cá nhân) nếu có trên máy; script này và hook pre-commit là công cụ nội bộ, không nằm trong kho.
-- Các thư mục `.githooks`, `.github`, `docs`, `installer`, `releases`, `tools` và thư mục công cụ AI/IDE (`.claude`, `.cursor`, `.vscode`…) đều nằm trong `.gitignore`.
+- Các thư mục `.githooks`, `.github`, `docs`, `installer`, `releases`, `tools` và thư mục công cụ AI/IDE (`.cursor`, `.vscode`, …) đều nằm trong `.gitignore`.
 
 ## Tab Cài đặt
 
