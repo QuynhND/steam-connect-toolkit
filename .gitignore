@@ -1,0 +1,10 @@
+# Build output
+dist/
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.rsp
+# Generated
+assets/app.ico

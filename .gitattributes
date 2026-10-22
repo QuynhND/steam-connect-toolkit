@@ -1,0 +1,10 @@
+# Chuẩn hoá xuống dòng; giữ nguyên file nhị phân và file PowerShell (có BOM UTF-8)
+* text=auto
+*.ps1 text eol=crlf
+*.cs text
+*.md text
+*.json text
+*.iss text
+*.ico binary
+*.exe binary
+*.zip binary
