@@ -1,5 +1,11 @@
 # Lịch sử phiên bản
 
+## 1.0.3 – 2026-10-22
+
+- Nâng cấp từ xa chuyển sang GitHub Releases: địa chỉ manifest mặc định là `…/releases/latest/download/latest.json` của kho (GitHub tự chuyển hướng tới bản mới nhất); gói phát hành không còn nằm trong kho nguồn.
+- Bản 1.0.0–1.0.2 không tự thấy bản mới: tải tay tại trang Releases, hoặc dán địa chỉ manifest mới vào Cài đặt → Cập nhật từ xa.
+- Kho nguồn: thêm `tools/publish-release.ps1` (tạo Release, tải gói lên); không theo dõi hook git, mẫu issue, tài liệu nội bộ và gói phát hành.
+
 ## 1.0.2 – 2026-10-22
 
 - Sửa lỗi: sau khi áp dụng DNS, ô tích card mạng bị bỏ tích nên "Chọn nhanh" và lần áp dụng tiếp theo báo "chưa chọn card mạng".

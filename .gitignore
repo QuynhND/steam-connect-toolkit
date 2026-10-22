@@ -32,3 +32,23 @@ ui-data/
 .env.*
 secrets*
 *-diag-*.zip
+
+# Không đưa lên kho: hook cục bộ, cấu hình GitHub, thư mục công cụ AI/IDE, tài liệu nội bộ, gói phát hành (dùng GitHub Releases)
+.githooks/
+.github/
+.claude/
+CLAUDE.md
+AGENTS.md
+.cursor/
+.cursorrules
+.windsurf/
+.windsurfrules
+.copilot/
+.codex/
+.aider*
+.gemini/
+.vscode/
+.idea/
+docs/
+releases/
+/latest.json

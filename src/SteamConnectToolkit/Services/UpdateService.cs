@@ -60,8 +60,8 @@ namespace SteamConnectToolkit.Services
     /// </summary>
     public static class UpdateService
     {
-        /// <summary>Địa chỉ manifest mặc định: file latest.json ở nhánh main của kho GitHub (release.ps1 -GitHubRepo cập nhật file này).</summary>
-        public const string DefaultManifestUrl = "https://raw.githubusercontent.com/QuynhND/steam-connect-toolkit/main/latest.json";
+        /// <summary>Địa chỉ manifest mặc định: file latest.json đính kèm GitHub Release mới nhất của kho (tools/publish-release.ps1 tải lên; GitHub chuyển hướng tới bản mới nhất).</summary>
+        public const string DefaultManifestUrl = AppInfo.ReleasesUrl + "/latest/download/latest.json";
         public const string ApplyArgument = "--apply-update";
         public const string AfterUpdateArgument = "--after-update";
         public const int CheckIntervalHours = 24;

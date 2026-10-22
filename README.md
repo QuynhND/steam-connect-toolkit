@@ -1,6 +1,6 @@
 # Steam Connect Toolkit
 
-**Tác giả:** Quynh Nguyen · **Giấy phép:** MIT · **Phiên bản:** 1.0.0 · *(tên cũ: Steam DNS Switcher)*
+**Tác giả:** Quynh Nguyen · **Giấy phép:** MIT · **Phiên bản:** 1.0.3 · *(tên cũ: Steam DNS Switcher)*
 
 Ứng dụng Windows 10/11 giúp **kiểm tra kết nối tới Steam**, **đổi DNS (IPv4 + IPv6)** sang các DNS công cộng có thu hồi về nguyên trạng, và **kết nối VPN** bằng VPN client tích hợp sẵn của Windows khi đổi DNS không đủ.
 
@@ -38,20 +38,20 @@ Tuỳ chọn này lưu trong `config.json` (`ShowGuideOnStartup`).
 
 ## Phát hành, nâng cấp
 
-- **Đóng gói**: `powershell -ExecutionPolicy Bypass -File .\release.ps1 -BaseUrl "https://…/releases/1.0.0" [-Installer]` → `dist\release\<phiên bản>\` gồm exe lẻ, zip portable, bộ cài (nếu có Inno Setup), `SHA256SUMS.txt`, `CHANGELOG.md`, `latest.json` (manifest cập nhật).
-- **Hướng dẫn nâng cấp cho người dùng**: [docs/HUONG-DAN-NANG-CAP.md](docs/HUONG-DAN-NANG-CAP.md).
-- **Phương án nâng cấp từ xa** (kiến trúc, manifest, hosting, an toàn, triển khai dần, quản trị nhiều máy): [docs/PHUONG-AN-NANG-CAP-TU-XA.md](docs/PHUONG-AN-NANG-CAP-TU-XA.md).
-- Trong app: Cài đặt → **Cập nhật từ xa** → nhập địa chỉ `latest.json` (https) → *Kiểm tra bản mới* → *Tải và cài đặt*. App xác minh SHA-256 (và chữ ký số nếu cấu hình), khôi phục DNS/VPN như khi thoát, rồi tự thay file hoặc chạy bộ cài im lặng và mở lại.
+- **Đóng gói**: `powershell -ExecutionPolicy Bypass -File .\release.ps1 [-Installer] [-Publish]` → `dist\release\<phiên bản>\` gồm exe lẻ, zip portable (kèm tài liệu hướng dẫn trong `docs`), bộ cài (nếu có Inno Setup), `SHA256SUMS.txt`, `CHANGELOG.md`, `latest.json` (manifest cập nhật).
+- **Phát hành**: gói đặt trên [GitHub Releases](https://github.com/QuynhND/steam-connect-toolkit/releases) theo tag `v<phiên bản>`, không nằm trong kho nguồn. `tools\publish-release.ps1 -Version x.y.z` tạo Release và tải các file lên; token GitHub lấy từ biến môi trường `GITHUB_TOKEN` hoặc Git Credential Manager, không bao giờ lưu trong kho.
+- **Nâng cấp từ xa**: app mặc định đọc `https://github.com/QuynhND/steam-connect-toolkit/releases/latest/download/latest.json` (GitHub tự chuyển hướng tới Release mới nhất), nên chỉ cần phát hành là mọi máy thấy bản mới. Hướng dẫn nâng cấp cho người dùng và phương án nâng cấp từ xa nằm trong thư mục `docs` của gói portable.
+- Trong app: Cài đặt → **Cập nhật từ xa** → *Kiểm tra bản mới* → *Tải và cài đặt* (địa chỉ manifest có sẵn; có thể thay bằng địa chỉ `https://…/latest.json` riêng). App xác minh SHA-256 (và chữ ký số nếu cấu hình), khôi phục DNS/VPN như khi thoát, rồi tự thay file hoặc chạy bộ cài im lặng và mở lại.
 
 ## Phản hồi và báo lỗi
 
-Cài đặt → **Phản hồi và báo lỗi**: nhập mô tả, bấm *Tạo issue trên GitHub* → trình duyệt mở trang tạo issue của kho với tiêu đề và nội dung điền sẵn (mô tả, thông tin hệ thống, 20 dòng nhật ký gần nhất). Nội dung được lược bỏ địa chỉ IP (trừ DNS công cộng), tên máy, tên người dùng, đường dẫn cá nhân và không bao giờ chứa mật khẩu; bấm *Xem trước / sao chép* để kiểm tra trước khi gửi. App không chứa token GitHub nào; việc gửi do bạn thực hiện trong trình duyệt bằng tài khoản của mình. Mẫu issue (báo lỗi / góp ý) có sẵn trong `.github/ISSUE_TEMPLATE`.
+Cài đặt → **Phản hồi và báo lỗi**: nhập mô tả, bấm *Tạo issue trên GitHub* → trình duyệt mở trang tạo issue của kho với tiêu đề và nội dung điền sẵn (mô tả, thông tin hệ thống, 20 dòng nhật ký gần nhất). Nội dung được lược bỏ địa chỉ IP (trừ DNS công cộng), tên máy, tên người dùng, đường dẫn cá nhân và không bao giờ chứa mật khẩu; bấm *Xem trước / sao chép* để kiểm tra trước khi gửi. App không chứa token GitHub nào; việc gửi do bạn thực hiện trong trình duyệt bằng tài khoản của mình.
 
 ## Bảo mật khi đóng góp mã
 
 - `.gitignore` loại trừ dữ liệu chạy (`config.json`, `history.json`, `session.json`, `*.log`, `updates/`), khoá và chứng chỉ (`*.pfx`, `*.key`, `*.pem`), file môi trường.
 - `tools/check-secrets.ps1` quét khoá riêng, token GitHub/AWS, blob DPAPI, mật khẩu trong JSON (chặn) và email, đường dẫn cá nhân (cảnh báo). `release.ps1` chạy quét này trước khi đóng gói.
-- Hook `.githooks/pre-commit` chạy quét trên file đang stage; kích hoạt bằng `git config core.hooksPath .githooks`.
+- Hook pre-commit cục bộ (không nằm trong kho): tạo `.githooks/pre-commit` gọi `tools/check-secrets.ps1` rồi `git config core.hooksPath .githooks`. Các thư mục `.githooks`, `.github`, `docs`, `releases` và thư mục công cụ AI/IDE (`.claude`, `.cursor`, `.vscode`…) đều nằm trong `.gitignore`.
 - Commit dùng địa chỉ ẩn danh của GitHub (`<tên>@users.noreply.github.com`) để không lộ email cá nhân.
 
 ## Tab Cài đặt
@@ -213,6 +213,9 @@ src/SteamConnectToolkit/
 tests/SmokeTest/                 Console kiểm thử lõi
 installer/SteamConnectToolkit.iss  Inno Setup
 tools/make-icon.ps1              Tạo assets/app.ico
+tools/check-secrets.ps1          Quét khoá/token/mật khẩu trước khi commit và phát hành
+tools/publish-release.ps1        Tạo GitHub Release và tải gói lên (token từ GITHUB_TOKEN / Git Credential Manager)
+release.ps1                      Build → kiểm thử → quét bí mật → gói portable, checksum, latest.json
 ```
 
 ## Giấy phép

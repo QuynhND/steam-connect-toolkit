@@ -500,6 +500,11 @@ internal static class Program
         string pub6 = VpnService.GetPublicIpv6(4000);
         IPAddress pub6Addr;
         Check(pub6 == null || (IPAddress.TryParse(pub6, out pub6Addr) && pub6Addr.AddressFamily == AddressFamily.InterNetworkV6), "IPv6 công cộng: null hoặc IPv6 hợp lệ", pub6 ?? "(không có IPv6)");
+
+        var live = UpdateService.Check(UpdateService.DefaultManifestUrl, new Version(0, 0, 0, 1), false, 20000);
+        Check(live.Ok ? (live.Latest >= new Version(1, 0, 0, 0) && live.Package != null && live.Package.Url.StartsWith(AppInfo.ReleasesUrl + "/download/", StringComparison.Ordinal))
+                      : live.Error.Contains("404"),
+            "Manifest GitHub Releases (…/releases/latest/download/latest.json): có bản mới hoặc 404 khi chưa có Release nào", live.Ok ? live.Describe() : live.Error);
     }
 
     private static void TestLegacyMigration(string tmp)
@@ -980,6 +985,8 @@ internal static class Program
             "IsAllowedUrl: chỉ https:// và file://");
         Check(UpdateService.IsCheckDue(null) && UpdateService.IsCheckDue("2000-01-01 00:00:00") && !UpdateService.IsCheckDue(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")),
             "IsCheckDue: mỗi ngày một lần");
+        Check(UpdateService.DefaultManifestUrl.StartsWith(AppInfo.ReleasesUrl + "/latest/download/", StringComparison.Ordinal) && UpdateService.IsAllowedUrl(UpdateService.DefaultManifestUrl),
+            "DefaultManifestUrl: trỏ tới GitHub Releases (…/releases/latest/download/latest.json) qua https");
 
         var rnd = new Random(7);
         var payload = new byte[5000];

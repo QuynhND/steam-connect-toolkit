@@ -1,9 +1,12 @@
 ﻿<#
 .SYNOPSIS
-  Đóng gói phát hành Steam Connect Toolkit: build → kiểm thử → gói portable (zip) → checksum → manifest latest.json (+ bộ cài nếu có Inno Setup).
+  Đóng gói phát hành Steam Connect Toolkit: build → kiểm thử → quét bí mật → gói portable (zip) → checksum → manifest latest.json (+ bộ cài nếu có Inno Setup).
+  Mặc định URL trong manifest trỏ tới GitHub Releases của kho (tag v<phiên bản>); -Publish tải gói lên GitHub Release bằng tools\publish-release.ps1.
 
 .PARAMETER BaseUrl
-  Địa chỉ gốc nơi sẽ đặt các file phát hành (dùng để ghi URL vào latest.json), ví dụ https://example.com/sct/releases/1.0.0
+  Địa chỉ gốc nơi sẽ đặt các file phát hành khi KHÔNG dùng GitHub Releases (ghi URL vào latest.json), ví dụ https://example.com/sct/releases/1.0.0
+.PARAMETER Publish
+  Sau khi đóng gói, tạo GitHub Release tag v<phiên bản> và tải gói lên (tag phải đã push; token từ GITHUB_TOKEN hoặc Git Credential Manager).
 .PARAMETER SkipTests
   Bỏ qua bộ tự kiểm thử (không khuyến nghị).
 .PARAMETER Installer
@@ -12,6 +15,8 @@
   Ghi chú phát hành ngắn ghi vào manifest (mặc định lấy mục đầu của CHANGELOG.md).
 
 .EXAMPLE
+  powershell -ExecutionPolicy Bypass -File .\release.ps1            # gói + manifest trỏ GitHub Releases
+  powershell -ExecutionPolicy Bypass -File .\release.ps1 -Publish   # ... rồi tạo Release và tải lên
   powershell -ExecutionPolicy Bypass -File .\release.ps1 -BaseUrl "https://example.com/sct/releases/1.0.0" -Installer
 #>
 param(
@@ -19,13 +24,14 @@ param(
     [string]$GitHubRepo = "QuynhND/steam-connect-toolkit",
     [switch]$SkipTests,
     [switch]$Installer,
+    [switch]$Publish,
     [string]$Notes = ""
 )
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $dist = Join-Path $root "dist"
-# Mặc định phát hành lên GitHub Releases của kho $GitHubRepo; manifest latest.json nằm ở gốc kho (nhánh main).
+# Mặc định phát hành lên GitHub Releases của kho $GitHubRepo (gói KHÔNG nằm trong kho nguồn); -BaseUrl để tự host nơi khác.
 $useGitHub = -not $BaseUrl
 
 # 1. Build (+ SmokeTest, + Installer)
@@ -95,10 +101,10 @@ if (-not $Notes) {
 
 # 8. Manifest latest.json (tên trường PascalCase khớp lớp UpdateManifest)
 if ($useGitHub) {
-    # Gói nằm ngay trong kho (thư mục releases/v<phiên bản>) → chỉ cần git push, không cần tạo GitHub Release thủ công.
-    $base = "https://raw.githubusercontent.com/$GitHubRepo/main/releases/v$version"
-    $notesUrl = "https://github.com/$GitHubRepo/blob/main/CHANGELOG.md"
-    $manifestUrl = "https://raw.githubusercontent.com/$GitHubRepo/main/latest.json"
+    # Gói đính kèm GitHub Release tag v<phiên bản>; địa chỉ manifest cố định .../releases/latest/download/latest.json (GitHub tự chuyển hướng tới Release mới nhất).
+    $base = "https://github.com/$GitHubRepo/releases/download/v$version"
+    $notesUrl = "https://github.com/$GitHubRepo/releases/tag/v$version"
+    $manifestUrl = "https://github.com/$GitHubRepo/releases/latest/download/latest.json"
 } else {
     $base = $BaseUrl.TrimEnd("/")
     $notesUrl = "$base/CHANGELOG.md"
@@ -119,25 +125,20 @@ if ($hasSetup) {
 $json = $manifest | ConvertTo-Json -Depth 4
 [IO.File]::WriteAllText((Join-Path $rel "latest.json"), $json, (New-Object Text.UTF8Encoding($false)))
 if (Test-Path (Join-Path $root "CHANGELOG.md")) { Copy-Item (Join-Path $root "CHANGELOG.md") $rel }
-if ($useGitHub) {
-    # Chép gói vào kho (releases/v<phiên bản>) và manifest ở gốc kho; một lần git push là app ngoài kia thấy bản mới.
-    $repoRel = Join-Path $root "releases\v$version"
-    if (Test-Path $repoRel) { Remove-Item $repoRel -Recurse -Force }
-    New-Item -ItemType Directory -Force $repoRel | Out-Null
-    Get-ChildItem $rel -File | ForEach-Object { Copy-Item $_.FullName $repoRel }
-    [IO.File]::WriteAllText((Join-Path $root "latest.json"), $json, (New-Object Text.UTF8Encoding($false)))
-}
 
 Write-Host ""
 Write-Host "=== Gói phát hành $version ==="
 Get-ChildItem $rel | ForEach-Object { "{0,-50} {1,12:N0} B" -f $_.Name, $_.Length }
 Write-Host ""
 if ($useGitHub) {
-    Write-Host "Bước tiếp theo (GitHub):"
-    Write-Host "  git add releases/v$version latest.json CHANGELOG.md"
-    Write-Host "  git commit -m `"release: v$version`"; git tag v$version; git push; git push --tags"
+    Write-Host "Bước tiếp theo (GitHub Releases – gói không commit vào kho):"
+    Write-Host "  1. git add -A; git commit -m `"release: v$version`"; git tag v$version; git push; git push --tags"
+    Write-Host "  2. powershell -File tools\publish-release.ps1 -Version $version   (hoặc tải tay các file trong $rel lên https://github.com/$GitHubRepo/releases/new?tag=v$version)"
     Write-Host "Địa chỉ manifest (đã đặt mặc định trong app): $manifestUrl"
-    Write-Host "Tuỳ chọn: tạo thêm GitHub Release tại https://github.com/$GitHubRepo/releases/new (tag v$version) và tải các file trong $rel lên để người dùng tải tay."
+    if ($Publish) {
+        & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "tools\publish-release.ps1") -Version $version -Dir $rel -Repo $GitHubRepo
+        if ($LASTEXITCODE -ne 0) { throw "Tải gói lên GitHub Release thất bại" }
+    }
 } else {
     Write-Host "Tải toàn bộ thư mục trên lên: $base"
     Write-Host "Địa chỉ manifest để nhập vào app (Cài đặt → Cập nhật từ xa): $manifestUrl"
