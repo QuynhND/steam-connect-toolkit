@@ -38,8 +38,8 @@ Tuỳ chọn này lưu trong `config.json` (`ShowGuideOnStartup`).
 
 ## Phát hành, nâng cấp
 
-- **Đóng gói**: `powershell -ExecutionPolicy Bypass -File .\release.ps1 [-Installer] [-Publish]` → `dist\release\<phiên bản>\` gồm exe lẻ, zip portable (kèm tài liệu hướng dẫn trong `docs`), bộ cài (nếu có Inno Setup), `SHA256SUMS.txt`, `CHANGELOG.md`, `latest.json` (manifest cập nhật).
-- **Phát hành**: gói đặt trên [GitHub Releases](https://github.com/QuynhND/steam-connect-toolkit/releases) theo tag `v<phiên bản>`, không nằm trong kho nguồn. `tools\publish-release.ps1 -Version x.y.z` tạo Release và tải các file lên; token GitHub lấy từ biến môi trường `GITHUB_TOKEN` hoặc Git Credential Manager, không bao giờ lưu trong kho.
+- **Đóng gói**: `powershell -ExecutionPolicy Bypass -File .\release.ps1 [-Installer]` → `dist\release\<phiên bản>\` gồm exe lẻ, zip portable (kèm tài liệu hướng dẫn trong `docs`), bộ cài (tuỳ chọn, cần Inno Setup), `SHA256SUMS.txt`, `CHANGELOG.md`, `latest.json` (manifest cập nhật).
+- **Phát hành**: gói đặt trên [GitHub Releases](https://github.com/QuynhND/steam-connect-toolkit/releases) theo tag `v<phiên bản>`, không nằm trong kho nguồn. Việc tạo Release và tải file lên do script nội bộ của tác giả thực hiện; token GitHub không bao giờ nằm trong kho.
 - **Nâng cấp từ xa**: app mặc định đọc `https://github.com/QuynhND/steam-connect-toolkit/releases/latest/download/latest.json` (GitHub tự chuyển hướng tới Release mới nhất), nên chỉ cần phát hành là mọi máy thấy bản mới. Hướng dẫn nâng cấp cho người dùng và phương án nâng cấp từ xa nằm trong thư mục `docs` của gói portable.
 - Trong app: Cài đặt → **Cập nhật từ xa** → *Kiểm tra bản mới* → *Tải và cài đặt* (địa chỉ manifest có sẵn; có thể thay bằng địa chỉ `https://…/latest.json` riêng). App xác minh SHA-256 (và chữ ký số nếu cấu hình), khôi phục DNS/VPN như khi thoát, rồi tự thay file hoặc chạy bộ cài im lặng và mở lại.
 
@@ -50,8 +50,8 @@ Cài đặt → **Phản hồi và báo lỗi**: nhập mô tả, bấm *Tạo i
 ## Bảo mật khi đóng góp mã
 
 - `.gitignore` loại trừ dữ liệu chạy (`config.json`, `history.json`, `session.json`, `*.log`, `updates/`), khoá và chứng chỉ (`*.pfx`, `*.key`, `*.pem`), file môi trường.
-- `tools/check-secrets.ps1` quét khoá riêng, token GitHub/AWS, blob DPAPI, mật khẩu trong JSON (chặn) và email, đường dẫn cá nhân (cảnh báo). `release.ps1` chạy quét này trước khi đóng gói.
-- Hook pre-commit cục bộ (không nằm trong kho): tạo `.githooks/pre-commit` gọi `tools/check-secrets.ps1` rồi `git config core.hooksPath .githooks`. Các thư mục `.githooks`, `.github`, `docs`, `releases` và thư mục công cụ AI/IDE (`.claude`, `.cursor`, `.vscode`…) đều nằm trong `.gitignore`.
+- Trước khi đóng gói, `release.ps1` chạy script quét thông tin nhạy cảm (khoá riêng, token GitHub/AWS, blob DPAPI, mật khẩu trong JSON, email và đường dẫn cá nhân) nếu có trên máy; script này và hook pre-commit là công cụ nội bộ, không nằm trong kho.
+- Các thư mục `.githooks`, `.github`, `docs`, `installer`, `releases`, `tools` và thư mục công cụ AI/IDE (`.claude`, `.cursor`, `.vscode`…) đều nằm trong `.gitignore`.
 
 ## Tab Cài đặt
 
@@ -210,10 +210,6 @@ src/SteamConnectToolkit/
     JsonStore.cs, AppPaths.cs (di trú thư mục cũ), AdminHelper.cs
   UI/MainForm.cs, AddProviderForm.cs, AddVpnForm.cs
 tests/SmokeTest/                 Console kiểm thử lõi
-installer/SteamConnectToolkit.iss  Inno Setup
-tools/make-icon.ps1              Tạo assets/app.ico
-tools/check-secrets.ps1          Quét khoá/token/mật khẩu trước khi commit và phát hành
-tools/publish-release.ps1        Tạo GitHub Release và tải gói lên (token từ GITHUB_TOKEN / Git Credential Manager)
 release.ps1                      Build → kiểm thử → quét bí mật → gói portable, checksum, latest.json
 ```
 

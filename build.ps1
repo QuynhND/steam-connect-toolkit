@@ -32,8 +32,9 @@ if (-not (Test-Path $csc)) { throw "Không tìm thấy csc.exe của .NET Framew
 New-Item -ItemType Directory -Force $dist | Out-Null
 
 if (-not (Test-Path $icon)) {
-    Write-Host "Tạo icon..."
-    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "tools\make-icon.ps1") -OutFile $icon
+    $mkIcon = Join-Path $root "tools\make-icon.ps1"
+    if (Test-Path $mkIcon) { Write-Host "Tạo icon..."; & powershell -NoProfile -ExecutionPolicy Bypass -File $mkIcon -OutFile $icon }
+    else { Write-Warning "Không có assets\app.ico và tools\make-icon.ps1 – biên dịch không có icon." }
 }
 
 function Invoke-Csc([string[]]$Options, [string[]]$Sources, [string]$Label) {
@@ -94,7 +95,9 @@ if ($Installer) {
         Write-Warning "Không tìm thấy Inno Setup 6 (ISCC.exe). Cài từ https://jrsoftware.org/isinfo.php rồi chạy lại với -Installer."
     } else {
         Write-Host "Tạo bộ cài bằng Inno Setup..."
-        & $iscc (Join-Path $root "installer\SteamConnectToolkit.iss")
+        $iss = Join-Path $root "installer\SteamConnectToolkit.iss"
+        if (-not (Test-Path $iss)) { throw "Không có $iss (thư mục installer là công cụ nội bộ, không nằm trong kho nguồn)" }
+        & $iscc $iss
         if ($LASTEXITCODE -ne 0) { throw "Inno Setup thất bại (mã $LASTEXITCODE)" }
     }
 }
