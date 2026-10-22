@@ -52,7 +52,6 @@ Cài đặt → **Phản hồi và báo lỗi**: nhập mô tả, bấm *Tạo i
 - `.gitignore` loại trừ dữ liệu chạy (`config.json`, `history.json`, `session.json`, `*.log`, `updates/`), khoá và chứng chỉ (`*.pfx`, `*.key`, `*.pem`), file môi trường.
 - `tools/check-secrets.ps1` quét khoá riêng, token GitHub/AWS, blob DPAPI, mật khẩu trong JSON (chặn) và email, đường dẫn cá nhân (cảnh báo). `release.ps1` chạy quét này trước khi đóng gói.
 - Hook pre-commit cục bộ (không nằm trong kho): tạo `.githooks/pre-commit` gọi `tools/check-secrets.ps1` rồi `git config core.hooksPath .githooks`. Các thư mục `.githooks`, `.github`, `docs`, `releases` và thư mục công cụ AI/IDE (`.claude`, `.cursor`, `.vscode`…) đều nằm trong `.gitignore`.
-- Commit dùng địa chỉ ẩn danh của GitHub (`<tên>@users.noreply.github.com`) để không lộ email cá nhân.
 
 ## Tab Cài đặt
 
