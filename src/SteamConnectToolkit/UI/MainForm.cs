@@ -26,6 +26,7 @@ namespace SteamConnectToolkit.UI
         private CancellationTokenSource _cts;
         private bool _busy;
         private bool _adaptersLoadedOnce;
+        private bool _fillingAdapters;
         private float _scale = 1f; // hệ số DPI (1.0 = 96 DPI)
         private readonly object _fileLogLock = new object();
 
@@ -339,6 +340,22 @@ namespace SteamConnectToolkit.UI
             catch (Exception ex) { LogError("Không mở được " + url + ": " + ex.Message); }
         }
 
+        /// <summary>Hook kiểm thử: trả lời hộp thoại thay người dùng (null = hiện hộp thoại thật).</summary>
+        internal static Func<string, string, MessageBoxButtons, DialogResult> TestAnswer;
+
+        /// <summary>Mọi hộp thoại xác nhận của cửa sổ chính đi qua đây để có thể tự động hoá kiểm thử.</summary>
+        private DialogResult Ask(string text, string caption, MessageBoxButtons buttons, MessageBoxIcon icon)
+        {
+            var hook = TestAnswer;
+            if (hook != null)
+            {
+                var ans = hook(text, caption, buttons);
+                Log("[hộp thoại] " + caption + " → " + ans);
+                return ans;
+            }
+            return MessageBox.Show(this, text, caption, buttons, icon);
+        }
+
         private string RecentLogLines(int count)
         {
             var lines = _rtbLog.Lines;
@@ -382,7 +399,7 @@ namespace SteamConnectToolkit.UI
             try
             {
                 Clipboard.SetText(text);
-                MessageBox.Show(this, text, "Nội dung sẽ gửi (đã sao chép vào clipboard)", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                Ask(text, "Nội dung sẽ gửi (đã sao chép vào clipboard)", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex) { LogError("Không sao chép được: " + ex.Message); }
         }
@@ -422,7 +439,7 @@ namespace SteamConnectToolkit.UI
             using (var dlg = new OpenFileDialog { Filter = "JSON (*.json)|*.json|Tất cả (*.*)|*.*", InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop) })
             {
                 if (dlg.ShowDialog(this) != DialogResult.OK) return;
-                if (MessageBox.Show(this, "Nhập cấu hình từ \"" + Path.GetFileName(dlg.FileName) + "\"?\nDanh sách DNS và tuỳ chọn hiện tại sẽ được thay bằng nội dung file (tài khoản VPN hiện có được giữ nếu file không có).",
+                if (Ask("Nhập cấu hình từ \"" + Path.GetFileName(dlg.FileName) + "\"?\nDanh sách DNS và tuỳ chọn hiện tại sẽ được thay bằng nội dung file (tài khoản VPN hiện có được giữ nếu file không có).",
                         "Nhập cấu hình", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
                 try
                 {
@@ -430,7 +447,7 @@ namespace SteamConnectToolkit.UI
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show(this, "Không nhập được: " + ex.Message, "Nhập cấu hình", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    Ask("Không nhập được: " + ex.Message, "Nhập cấu hình", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
                 RefreshProvidersCombo();
@@ -468,7 +485,7 @@ namespace SteamConnectToolkit.UI
         {
             int n = _config.VpnCredentials != null ? _config.VpnCredentials.Count : 0;
             if (n == 0) return;
-            if (MessageBox.Show(this, "Xoá " + n + " tài khoản VPN đã lưu trong app? (Không ảnh hưởng tài khoản Windows đã nhớ trong cấu hình VPN.)",
+            if (Ask("Xoá " + n + " tài khoản VPN đã lưu trong app? (Không ảnh hưởng tài khoản Windows đã nhớ trong cấu hình VPN.)",
                     "Xoá tài khoản VPN", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
             _config.VpnCredentials.Clear();
             SaveConfig();
@@ -482,7 +499,7 @@ namespace SteamConnectToolkit.UI
 
         private void BtnNatT_Click(object sender, EventArgs e)
         {
-            if (MessageBox.Show(this,
+            if (Ask(
                     "Đặt HKLM\\SYSTEM\\CurrentControlSet\\Services\\PolicyAgent\\AssumeUDPEncapsulationContextOnSendRule = 2 để L2TP/IPsec hoạt động khi máy nằm sau router NAT, " +
                     "rồi khởi động lại dịch vụ IPsec. Windows khuyến nghị khởi động lại máy để chắc chắn có hiệu lực.\n\nTiếp tục?",
                     "Khoá L2TP sau NAT", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
@@ -567,8 +584,15 @@ namespace SteamConnectToolkit.UI
             _chkAutoCheck.Checked = _config.AutoCheckOnStartup;
             _chkAutoCheck.CheckedChanged += (s, e) => { _config.AutoCheckOnStartup = _chkAutoCheck.Checked; SaveConfig(); };
 
-            _txtUpdateUrl.Text = string.IsNullOrEmpty(_config.UpdateManifestUrl) ? UpdateService.DefaultManifestUrl : _config.UpdateManifestUrl;
-            _txtUpdateUrl.TextChanged += (s, e) => { _config.UpdateManifestUrl = _txtUpdateUrl.Text.Trim(); SaveConfig(); UpdateUpdateStatus(); };
+            _txtUpdateUrl.Text = EffectiveManifestUrl();
+            _txtUpdateUrl.TextChanged += (s, e) =>
+            {
+                // Giữ cấu hình rỗng khi người dùng dùng địa chỉ mặc định (để bản sau đổi mặc định vẫn có hiệu lực).
+                string t = _txtUpdateUrl.Text.Trim();
+                _config.UpdateManifestUrl = string.Equals(t, UpdateService.DefaultManifestUrl, StringComparison.OrdinalIgnoreCase) ? "" : t;
+                SaveConfig();
+                UpdateUpdateStatus();
+            };
             _chkUpdateAuto.Checked = _config.UpdateCheckOnStartup;
             _chkUpdateAuto.CheckedChanged += (s, e) => { _config.UpdateCheckOnStartup = _chkUpdateAuto.Checked; SaveConfig(); };
             UpdateUpdateStatus();
@@ -582,7 +606,7 @@ namespace SteamConnectToolkit.UI
 
         private void BtnResetSettings_Click(object sender, EventArgs e)
         {
-            if (MessageBox.Show(this, "Đặt lại các tuỳ chọn về mặc định? (Danh sách DNS, tài khoản VPN, lịch sử và bản sao lưu không bị ảnh hưởng.)",
+            if (Ask("Đặt lại các tuỳ chọn về mặc định? (Danh sách DNS, tài khoản VPN, lịch sử và bản sao lưu không bị ảnh hưởng.)",
                     "Đặt lại cài đặt", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
             _config.ResetOptions();
             ReloadSettingsValues();
@@ -819,7 +843,8 @@ namespace SteamConnectToolkit.UI
 
             _lvAdapters = MakeListView(new[] { "Card mạng", "DNS IPv4 hiện tại", "DNS IPv6 hiện tại", "Nguồn", "Trạng thái" }, new[] { 200, 170, 270, 150, -2 });
             _lvAdapters.CheckBoxes = true;
-            _lvAdapters.ItemCheck += (s, e) => { if (_busy) e.NewValue = e.CurrentValue; };
+            // Không cho người dùng đổi tích khi đang bận; nhưng khi app tự nạp lại danh sách (có thể xảy ra lúc bận) thì phải giữ trạng thái tích.
+            _lvAdapters.ItemCheck += (s, e) => { if (_busy && !_fillingAdapters) e.NewValue = e.CurrentValue; };
             _btnRefreshAdapters = new Button { Text = "Làm mới", Dock = DockStyle.Bottom, Height = 28 };
             _btnRefreshAdapters.Click += (s, e) => RefreshAdapters();
             var grpAdapters = new GroupBox
@@ -1126,7 +1151,7 @@ namespace SteamConnectToolkit.UI
                 LogOk("✔ Đã nâng cấp lên phiên bản " + AppInfo.Version + ".");
                 Notice("Đã nâng cấp lên phiên bản " + AppInfo.Version + ".", NoticeKind.Success);
             }
-            if (_config.UpdateCheckOnStartup && !string.IsNullOrWhiteSpace(_config.UpdateManifestUrl) && UpdateService.IsCheckDue(_config.LastUpdateCheck))
+            if (_config.UpdateCheckOnStartup && !string.IsNullOrWhiteSpace(EffectiveManifestUrl()) && UpdateService.IsCheckDue(_config.LastUpdateCheck))
                 BeginInvoke(new Action(async () => await StartupUpdateCheckAsync()));
         }
 
@@ -1134,10 +1159,16 @@ namespace SteamConnectToolkit.UI
         //  Cập nhật từ xa
         // =====================================================================
 
+        /// <summary>Ô địa chỉ để trống = dùng địa chỉ mặc định của kho GitHub.</summary>
+        private string EffectiveManifestUrl()
+        {
+            return string.IsNullOrWhiteSpace(_config.UpdateManifestUrl) ? UpdateService.DefaultManifestUrl : _config.UpdateManifestUrl.Trim();
+        }
+
         private void UpdateUpdateStatus()
         {
             string ver = UpdateService.CurrentVersion().ToString(3);
-            bool hasUrl = !string.IsNullOrWhiteSpace(_config.UpdateManifestUrl);
+            bool hasUrl = !string.IsNullOrWhiteSpace(EffectiveManifestUrl());
             if (!hasUrl)
             {
                 _lblUpdateStatus.Text = "Phiên bản " + ver + " – chưa cấu hình địa chỉ manifest, cập nhật từ xa đang tắt.";
@@ -1159,7 +1190,7 @@ namespace SteamConnectToolkit.UI
 
         private async Task<UpdateCheckResult> RunUpdateCheckAsync(CancellationToken ct)
         {
-            string url = (_config.UpdateManifestUrl ?? "").Trim();
+            string url = EffectiveManifestUrl();
             var cur = UpdateService.CurrentVersion();
             bool installed = UpdateService.IsInstalledCopy();
             var r = await Task.Run(() => UpdateService.Check(url, cur, installed, 15000), ct);
@@ -1193,7 +1224,7 @@ namespace SteamConnectToolkit.UI
 
         private async void BtnCheckUpdate_Click(object sender, EventArgs e)
         {
-            if (string.IsNullOrWhiteSpace(_config.UpdateManifestUrl))
+            if (string.IsNullOrWhiteSpace(EffectiveManifestUrl()))
             {
                 Notice("Hãy nhập địa chỉ manifest (https://…/latest.json) trước.", NoticeKind.Warning);
                 return;
@@ -1216,7 +1247,7 @@ namespace SteamConnectToolkit.UI
                 + (string.IsNullOrEmpty(r.Manifest.Notes) ? "" : "\n\nThay đổi:\n" + r.Manifest.Notes)
                 + (r.Mandatory ? "\n\nBản này là bắt buộc (phiên bản hiện tại không còn được hỗ trợ)." : "")
                 + "\n\nTải và cài đặt ngay? (No: để sau; Cancel: bỏ qua bản này)";
-            var ans = MessageBox.Show(this, msg, "Có bản mới", r.Mandatory ? MessageBoxButtons.YesNo : MessageBoxButtons.YesNoCancel, MessageBoxIcon.Information);
+            var ans = Ask(msg, "Có bản mới", r.Mandatory ? MessageBoxButtons.YesNo : MessageBoxButtons.YesNoCancel, MessageBoxIcon.Information);
             if (ans == DialogResult.Yes) BtnInstallUpdate_Click(this, EventArgs.Empty);
             else if (ans == DialogResult.Cancel)
             {
@@ -1265,7 +1296,7 @@ namespace SteamConnectToolkit.UI
             {
                 string how = usesInstaller ? "chạy bộ cài (im lặng, giữ nguyên dữ liệu)" : "thay file chương trình (bản cũ giữ ở .bak)";
                 string exit = _config.KeepChangesOnExit ? "giữ thay đổi DNS/VPN theo cài đặt" : "khôi phục DNS/VPN như khi thoát bình thường";
-                var ask = MessageBox.Show(this,
+                var ask = Ask(
                     "Đã tải và kiểm tra bản " + r.Manifest.Version + ".\n\nApp sẽ " + exit + ", đóng, " + how + ", rồi tự mở lại.\n\nCài đặt ngay bây giờ?",
                     "Cài đặt bản mới", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
                 if (ask == DialogResult.Yes)
@@ -1292,7 +1323,7 @@ namespace SteamConnectToolkit.UI
             catch (Exception ex)
             {
                 GuardianRunner.FileLog("Cập nhật: không khởi chạy được – " + ex.Message);
-                MessageBox.Show(this, "Không khởi chạy được bản cập nhật: " + ex.Message + "\n\nFile đã tải: " + _pendingUpdatePath, "Cập nhật", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Ask("Không khởi chạy được bản cập nhật: " + ex.Message + "\n\nFile đã tải: " + _pendingUpdatePath, "Cập nhật", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             _pendingUpdatePath = null;
         }
@@ -1322,7 +1353,7 @@ namespace SteamConnectToolkit.UI
                 }
                 else
                 {
-                    var r = MessageBox.Show(this,
+                    var r = Ask(
                         (unclean ? "Phiên trước kết thúc không bình thường (app dừng đột ngột). " : "") + "Hiện còn thay đổi do app gây ra:\n\n" + what +
                         "\n\nKhôi phục cấu hình gốc ngay bây giờ?\n(No = giữ nguyên, bạn có thể bấm \"4. Thu hồi\" sau.)",
                         "Khôi phục cấu hình", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
@@ -1379,7 +1410,7 @@ namespace SteamConnectToolkit.UI
             {
                 if (!shutdown)
                 {
-                    var r0 = MessageBox.Show(this, "Đang có thao tác chạy. Dừng và thoát?", "Steam Connect Toolkit", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                    var r0 = Ask("Đang có thao tác chạy. Dừng và thoát?", "Steam Connect Toolkit", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
                     if (r0 != DialogResult.Yes)
                     {
                         e.Cancel = true;
@@ -1433,7 +1464,7 @@ namespace SteamConnectToolkit.UI
             else
             {
                 string what = SessionService.DescribePending(session, _config);
-                var r = MessageBox.Show(this,
+                var r = Ask(
                     "Trước khi thoát, app sẽ khôi phục cấu hình gốc:\n\n" + what + "\n\n" +
                     "Yes: khôi phục rồi thoát (khuyên dùng).\n" +
                     "No: GIỮ thay đổi và thoát (DNS/VPN vẫn như hiện tại cho tới khi bạn bấm Thu hồi).\n" +
@@ -1464,7 +1495,7 @@ namespace SteamConnectToolkit.UI
                     HistoryService.Add("Thoát app", "(app)", summary, ok ? "Đã khôi phục" : "Khôi phục chưa trọn vẹn");
                     if (!ok)
                     {
-                        var r2 = MessageBox.Show(this,
+                        var r2 = Ask(
                             "Khôi phục chưa trọn vẹn: " + summary + "\n\nVẫn thoát? (Bản sao lưu được giữ lại; guardian sẽ thử lại và lần mở sau app sẽ đề nghị khôi phục tiếp.)",
                             "Khôi phục chưa xong", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
                         if (r2 != DialogResult.Yes)
@@ -1490,21 +1521,29 @@ namespace SteamConnectToolkit.UI
         {
             var previously = new HashSet<string>(GetCheckedAdapters().Select(a => a.Id));
             _adapters = NetworkAdapterService.GetAdapters(true);
-            _lvAdapters.BeginUpdate();
-            _lvAdapters.Items.Clear();
-            foreach (var a in _adapters)
+            _fillingAdapters = true;
+            try
             {
-                var item = new ListViewItem(a.Name) { Tag = a };
-                item.SubItems.Add(a.Ipv4DnsText());
-                item.SubItems.Add(a.Ipv6DnsText());
-                item.SubItems.Add(a.SourceText());
-                item.SubItems.Add(a.TypeText() + (a.IsUp ? ", đang kết nối" : ", tắt") + (a.HasGateway ? "" : ", không gateway"));
-                item.Checked = _adaptersLoadedOnce ? previously.Contains(a.Id) : a.Recommended;
-                if (a.Recommended) item.Font = new Font(_lvAdapters.Font, FontStyle.Bold);
-                else if (!a.IsUp) item.ForeColor = Color.Gray;
-                _lvAdapters.Items.Add(item);
+                _lvAdapters.BeginUpdate();
+                _lvAdapters.Items.Clear();
+                foreach (var a in _adapters)
+                {
+                    var item = new ListViewItem(a.Name) { Tag = a };
+                    item.SubItems.Add(a.Ipv4DnsText());
+                    item.SubItems.Add(a.Ipv6DnsText());
+                    item.SubItems.Add(a.SourceText());
+                    item.SubItems.Add(a.TypeText() + (a.IsUp ? ", đang kết nối" : ", tắt") + (a.HasGateway ? "" : ", không gateway"));
+                    if (a.Recommended) item.Font = new Font(_lvAdapters.Font, FontStyle.Bold);
+                    else if (!a.IsUp) item.ForeColor = Color.Gray;
+                    _lvAdapters.Items.Add(item);
+                    item.Checked = _adaptersLoadedOnce ? previously.Contains(a.Id) : a.Recommended;
+                }
+                _lvAdapters.EndUpdate();
             }
-            _lvAdapters.EndUpdate();
+            finally
+            {
+                _fillingAdapters = false;
+            }
             _adaptersLoadedOnce = true;
         }
 
@@ -1856,6 +1895,7 @@ namespace SteamConnectToolkit.UI
         private async Task<List<DomainCheckResult>> CheckSteamCoreAsync(string title, CancellationToken ct)
         {
             SetCommand(title);
+            Log("--- " + title + " ---");
             Notice("Đang kiểm tra kết nối tới Steam bằng DNS hiện tại của hệ thống…", NoticeKind.Info);
             UI(() => _lvResults.Items.Clear());
             int total = SteamChecker.Domains.Length;
@@ -1994,7 +2034,7 @@ namespace SteamConnectToolkit.UI
         private void HandleMissingBackups(List<AdapterDnsState> missing)
         {
             string names = string.Join(", ", missing.Select(m => m.AdapterName));
-            var r = MessageBox.Show(this,
+            var r = Ask(
                 "Các card sau không có trong hệ thống nên chưa khôi phục được: " + names + ".\n\n" +
                 "• Nếu card chỉ đang bị TẮT: chọn No, bật card lên rồi bấm Thu hồi lại.\n" +
                 "• Nếu card đã bị GỠ khỏi máy: chọn Yes để xoá bản sao lưu của card đó.",
@@ -2187,7 +2227,7 @@ namespace SteamConnectToolkit.UI
                 + "\n\nIPv4: " + p.Ipv4Text()
                 + "\nIPv6: " + (p.HasIpv6() ? p.Ipv6Text() : "không có → sẽ xoá DNS IPv6 để Windows không dùng DNS IPv6 của ISP")
                 + "\n\nCấu hình hiện tại sẽ được sao lưu để có thể thu hồi. Tiếp tục?";
-            if (MessageBox.Show(this, msg, "Xác nhận đổi DNS", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            if (Ask(msg, "Xác nhận đổi DNS", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
 
             await RunOperation("Áp dụng " + p.Name, async ct =>
             {
@@ -2205,7 +2245,7 @@ namespace SteamConnectToolkit.UI
                 return;
             }
             string msg = "Khôi phục cấu hình gốc:\n\n" + SessionService.DescribePending(session, _config) + "\n\nTiếp tục?";
-            if (MessageBox.Show(this, msg, "Xác nhận thu hồi", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            if (Ask(msg, "Xác nhận thu hồi", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
 
             await RunOperation("Thu hồi thay đổi", async ct =>
             {
@@ -2230,7 +2270,7 @@ namespace SteamConnectToolkit.UI
             }
             string msg = "Sẽ đo " + n + " DNS đang bật với " + SteamChecker.Domains.Length + " tên miền Steam, chọn DNS tốt nhất và áp dụng ngay cho:\n  • "
                 + string.Join("\n  • ", adapters.Select(a => a.Name)) + "\n\nCấu hình hiện tại sẽ được sao lưu để có thể thu hồi. Tiếp tục?";
-            if (MessageBox.Show(this, msg, "Chọn nhanh DNS tốt nhất", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            if (Ask(msg, "Chọn nhanh DNS tốt nhất", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
 
             await RunOperation("Chọn nhanh DNS tốt nhất", ct => BestCoreAsync(adapters, ct));
         }
@@ -2277,7 +2317,7 @@ namespace SteamConnectToolkit.UI
 
         private void BtnClearHistory_Click(object sender, EventArgs e)
         {
-            if (MessageBox.Show(this, "Xoá toàn bộ lịch sử? (Bản sao lưu DNS gốc không bị ảnh hưởng)", "Xoá lịch sử", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+            if (Ask("Xoá toàn bộ lịch sử? (Bản sao lưu DNS gốc không bị ảnh hưởng)", "Xoá lịch sử", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
             try
             {
                 HistoryService.Clear();
@@ -2434,7 +2474,7 @@ namespace SteamConnectToolkit.UI
                 Log("Đã bỏ " + p.Name + " khỏi lựa chọn (DNS có sẵn chỉ bị tắt, có thể bật lại).");
                 return;
             }
-            if (MessageBox.Show(this, "Xoá \"" + p.Name + "\" khỏi danh sách?", "Xoá DNS", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            if (Ask("Xoá \"" + p.Name + "\" khỏi danh sách?", "Xoá DNS", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
             _config.Providers.Remove(p);
             SaveConfig();
             RefreshProvidersGrid();
@@ -2444,7 +2484,7 @@ namespace SteamConnectToolkit.UI
 
         private void BtnReset_Click(object sender, EventArgs e)
         {
-            if (MessageBox.Show(this, "Bật lại toàn bộ DNS chính và tắt DNS bổ sung? DNS tự thêm được giữ nguyên.", "Khôi phục mặc định", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            if (Ask("Bật lại toàn bộ DNS chính và tắt DNS bổ sung? DNS tự thêm được giữ nguyên.", "Khôi phục mặc định", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
             ProviderCatalog.ResetBuiltIns(_config);
             SaveConfig();
             RefreshProvidersGrid();
@@ -2625,11 +2665,13 @@ namespace SteamConnectToolkit.UI
             SetMarquee("Đang quay số VPN… (có thể mất tới 1 phút)");
 
             string ipBefore = null;
+            string ip6Before = null;
             await Task.Run(() =>
             {
                 string err;
                 ipBefore = VpnService.GetPublicIp(5000, out err);
-                if (ipBefore != null) Log("IP công cộng trước khi kết nối: " + ipBefore);
+                ip6Before = VpnService.GetPublicIpv6(4000);
+                if (ipBefore != null) Log("IP công cộng trước khi kết nối: IPv4 " + ipBefore + (ip6Before != null ? ", IPv6 " + ip6Before : ", không có IPv6"));
                 else LogWarn("Không lấy được IP công cộng trước khi kết nối: " + err);
             }, ct);
 
@@ -2651,21 +2693,26 @@ namespace SteamConnectToolkit.UI
             UpdateBackupStatus();
 
             string ipAfter = null;
+            string ip6After = null;
             await Task.Run(() =>
             {
                 string err;
                 ipAfter = VpnService.GetPublicIp(8000, out err);
+                ip6After = VpnService.GetPublicIpv6(4000);
                 if (ipAfter != null)
                 {
                     string cc = VpnService.GetIpCountry(ipAfter, 5000);
-                    string text = ipAfter + (cc != null ? " (" + cc + ")" : "");
+                    string text = "IPv4 " + ipAfter + (cc != null ? " (" + cc + ")" : "");
+                    if (ip6After != null) text += " · IPv6 " + ip6After + (ip6Before != null && ip6After == ip6Before ? " (không qua VPN)" : "");
                     Log("IP công cộng sau khi kết nối: " + text);
                     UI(() => { _lblVpnIp.Text = "IP công cộng: " + text; });
                 }
                 else LogWarn("Không lấy được IP công cộng sau khi kết nối: " + err);
             }, ct);
             if (ipBefore != null && ipAfter != null && ipBefore == ipAfter)
-                LogWarn("⚠ IP công cộng không đổi – lưu lượng có thể chưa đi qua VPN (cấu hình bật split tunneling?).");
+                LogWarn("⚠ IPv4 công cộng không đổi – lưu lượng có thể chưa đi qua VPN (cấu hình bật split tunneling?).");
+            if (ip6After != null && ip6Before != null && ip6After == ip6Before)
+                LogWarn("⚠ IPv6 vẫn đi thẳng qua ISP (VPN này chỉ chuyển IPv4): trang web có IPv6 sẽ không qua VPN. Steam hiện dùng IPv4 nên không ảnh hưởng; nếu cần, tắt IPv6 trên card mạng khi dùng VPN.");
 
             Notice("Đã kết nối VPN " + p.Name + (ipAfter != null ? " – IP công cộng " + ipAfter : "") + ".", NoticeKind.Success);
             if (checkSteam) await CheckSteamCoreAsync("Kiểm tra Steam qua VPN " + p.Name, ct);
@@ -2713,7 +2760,8 @@ namespace SteamConnectToolkit.UI
                     string ip = VpnService.GetPublicIp(8000, out err);
                     if (ip == null) throw new InvalidOperationException("Không lấy được IP công cộng: " + err);
                     string cc = VpnService.GetIpCountry(ip, 5000);
-                    text = ip + (cc != null ? " (" + cc + ")" : "");
+                    string ip6 = VpnService.GetPublicIpv6(4000);
+                    text = "IPv4 " + ip + (cc != null ? " (" + cc + ")" : "") + (ip6 != null ? " · IPv6 " + ip6 : " · không có IPv6");
                 }, ct);
                 UI(() => { _lblVpnIp.Text = "IP công cộng: " + text; });
                 Log("IP công cộng hiện tại: " + text);
@@ -2796,7 +2844,7 @@ namespace SteamConnectToolkit.UI
                 return;
             }
             string msg = "Xoá cấu hình VPN \"" + p.Name + "\" (" + p.Server + ") khỏi Windows?" + (p.IsConnected ? "\n\nVPN đang kết nối sẽ bị ngắt trước." : "");
-            if (MessageBox.Show(this, msg, "Xoá cấu hình VPN", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            if (Ask(msg, "Xoá cấu hình VPN", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
             await RunOperation("Xoá cấu hình VPN " + p.Name, async ct =>
             {
                 if (p.IsConnected) await VpnDisconnectCoreAsync(p, ct);
@@ -2922,14 +2970,14 @@ namespace SteamConnectToolkit.UI
                 + "\nvà kết nối bằng tài khoản vpn / vpn, sau đó kiểm tra Steam.\n\n"
                 + "Lưu ý: VPN Gate là dịch vụ công cộng miễn phí do tình nguyện viên vận hành, có ghi log; chỉ nên dùng để truy cập Steam, "
                 + "không đăng nhập dịch vụ nhạy cảm (ngân hàng...). Tiếp tục?";
-            if (MessageBox.Show(this, msg, "VPN Gate", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            if (Ask(msg, "VPN Gate", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
 
             if (spec.TunnelType == "L2tp")
             {
                 var rule = VpnService.GetL2tpNatRule();
                 if (rule != 2)
                 {
-                    var r = MessageBox.Show(this,
+                    var r = Ask(
                         "L2TP/IPsec khi máy nằm sau router NAT cần khoá registry AssumeUDPEncapsulationContextOnSendRule = 2 (hiện " + (rule.HasValue ? rule.Value.ToString() : "chưa đặt") + ").\n\n"
                         + "Yes: đặt ngay và khởi động lại dịch vụ IPsec (có thể vẫn cần khởi động lại Windows).\nNo: cứ thử kết nối.\nCancel: huỷ.",
                         "L2TP sau NAT", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);

@@ -327,9 +327,11 @@ namespace SteamConnectToolkit.Services
         //  IP công cộng (để thấy lưu lượng đã đi qua VPN chưa)
         // =====================================================================
 
-        // checkip.amazonaws.com đứng đầu: api.ipify.org bị timeout khi đi qua một số VPN (đã gặp với VPN Gate).
-        public static readonly string[] IpEndpoints = { "https://checkip.amazonaws.com", "https://icanhazip.com", "https://ifconfig.me/ip", "https://api.ipify.org" };
+        // Chỉ dùng máy chủ IPv4 (api4 / ipv4.*): máy chủ dual-stack sẽ trả IPv6 của ISP ngay cả khi đang nối VPN IPv4.
+        public static readonly string[] IpEndpoints = { "https://api4.ipify.org", "https://ipv4.icanhazip.com", "https://checkip.amazonaws.com", "https://ifconfig.me/ip" };
+        public static readonly string[] Ipv6Endpoints = { "https://api6.ipify.org", "https://ipv6.icanhazip.com" };
 
+        /// <summary>IPv4 công cộng (null nếu không lấy được).</summary>
         public static string GetPublicIp(int timeoutMs, out string error)
         {
             error = null;
@@ -340,13 +342,30 @@ namespace SteamConnectToolkit.Services
                 {
                     string s = HttpGet(url, perEndpoint).Trim();
                     IPAddress ip;
-                    if (IPAddress.TryParse(s, out ip)) return ip.ToString();
-                    error = "phản hồi không hợp lệ từ " + url;
+                    if (IPAddress.TryParse(s, out ip) && ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork) return ip.ToString();
+                    error = "phản hồi không phải IPv4 từ " + url;
                 }
                 catch (Exception ex)
                 {
                     error = ex.Message;
                 }
+            }
+            return null;
+        }
+
+        /// <summary>IPv6 công cộng; null nếu máy không có IPv6 (hoặc không hỏi được). Dùng để phát hiện rò rỉ IPv6 khi nối VPN.</summary>
+        public static string GetPublicIpv6(int timeoutMs)
+        {
+            int perEndpoint = Math.Max(1500, Math.Min(timeoutMs, 5000));
+            foreach (var url in Ipv6Endpoints)
+            {
+                try
+                {
+                    string s = HttpGet(url, perEndpoint).Trim();
+                    IPAddress ip;
+                    if (IPAddress.TryParse(s, out ip) && ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6) return ip.ToString();
+                }
+                catch (Exception) { }
             }
             return null;
         }

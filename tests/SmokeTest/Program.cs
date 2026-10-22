@@ -492,6 +492,14 @@ internal static class Program
         try { DiscoveryService.FetchCountry("zz", 0.9, 5, false, null); }
         catch (Exception ex) { threw = true; msg = ex.Message; }
         Check(threw, "Discovery: mã quốc gia không có → báo lỗi, không treo", msg);
+
+        string ipErr;
+        string pub4 = VpnService.GetPublicIp(6000, out ipErr);
+        IPAddress pub4Addr;
+        Check(pub4 != null && IPAddress.TryParse(pub4, out pub4Addr) && pub4Addr.AddressFamily == AddressFamily.InterNetwork, "IP công cộng: luôn là IPv4 (máy có IPv6 vẫn trả IPv4)", pub4 ?? ipErr);
+        string pub6 = VpnService.GetPublicIpv6(4000);
+        IPAddress pub6Addr;
+        Check(pub6 == null || (IPAddress.TryParse(pub6, out pub6Addr) && pub6Addr.AddressFamily == AddressFamily.InterNetworkV6), "IPv6 công cộng: null hoặc IPv6 hợp lệ", pub6 ?? "(không có IPv6)");
     }
 
     private static void TestLegacyMigration(string tmp)

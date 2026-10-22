@@ -1,5 +1,12 @@
 # Lịch sử phiên bản
 
+## 1.0.2 – 2026-10-22
+
+- Sửa lỗi: sau khi áp dụng DNS, ô tích card mạng bị bỏ tích nên "Chọn nhanh" và lần áp dụng tiếp theo báo "chưa chọn card mạng".
+- Sửa lỗi: cấu hình mới không có địa chỉ manifest nên nút "Kiểm tra bản mới" báo chưa cấu hình; ô để trống nay dùng địa chỉ kho GitHub mặc định.
+- VPN: kiểm tra IP công cộng bằng máy chủ IPv4; hiển thị cả IPv6 và cảnh báo khi IPv6 vẫn đi thẳng qua ISP (VPN chỉ chuyển IPv4).
+- Nhật ký ghi rõ từng lần kiểm tra Steam (trước/sau đổi DNS, qua VPN).
+
 ## 1.0.1 – 2026-10-22
 
 - Thêm mục "Phản hồi và báo lỗi" trong Cài đặt: tạo issue trên GitHub với nội dung điền sẵn (đã ẩn IP, tên máy, tên người dùng; không chứa mật khẩu), xem trước và sao chép, xem issue đã có.
