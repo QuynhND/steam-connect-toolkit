@@ -8,3 +8,27 @@ obj/
 *.rsp
 # Generated
 assets/app.ico
+
+# Dữ liệu chạy thử / thông tin nhạy cảm – KHÔNG commit
+*.log
+gcm-diagnose.log
+/config.json
+session.json
+history.json
+original-dns.json
+updates/
+ui-data/
+*.bak
+*.part
+*.corrupt
+*.tmp
+*.pfx
+*.p12
+*.snk
+*.key
+*.pem
+*.cer
+.env
+.env.*
+secrets*
+*-diag-*.zip

@@ -1,5 +1,12 @@
 # Lịch sử phiên bản
 
+## 1.0.1 – 2026-10-22
+
+- Thêm mục "Phản hồi và báo lỗi" trong Cài đặt: tạo issue trên GitHub với nội dung điền sẵn (đã ẩn IP, tên máy, tên người dùng; không chứa mật khẩu), xem trước và sao chép, xem issue đã có.
+- Mục Giới thiệu có nút mở trang dự án và các bản phát hành trên GitHub.
+- Địa chỉ manifest cập nhật mặc định trỏ về kho GitHub; gói phát hành nằm trong thư mục `releases/` của kho.
+- Kho nguồn: script quét thông tin nhạy cảm, hook pre-commit, mẫu issue.
+
 ## 1.0.0 – 2026-10-21
 
 Phiên bản đầu tiên.

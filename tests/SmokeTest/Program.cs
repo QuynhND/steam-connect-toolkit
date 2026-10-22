@@ -86,6 +86,7 @@ internal static class Program
             TestGuideAndSettings();
             TestAboutAndDiagnostics(builtIn);
             TestUpdates(tmp);
+            TestFeedback();
             if (network) TestNetworkEdgeCases();
             else Console.WriteLine("\n(bỏ qua kiểm thử mạng: --no-network)");
         }
@@ -1046,6 +1047,39 @@ internal static class Program
         string thumb;
         Check(UpdateService.VerifySigner(target, "", out thumb) && thumb == null, "VerifySigner: không yêu cầu chữ ký → chấp nhận file không ký");
         Check(!UpdateService.VerifySigner(target, "ABCDEF0123", out thumb), "VerifySigner: yêu cầu chữ ký mà file không ký → từ chối");
+    }
+
+    private static void TestFeedback()
+    {
+        Section("Phản hồi / tạo issue GitHub (không lộ thông tin cá nhân)");
+        string user = Environment.UserName;
+        string machine = Environment.MachineName;
+        string raw = "IP công cộng: 203.0.113.45, DNS 8.8.8.8 và 2001:4860:4860::8888, máy " + machine + " người dùng " + user + " tại C:\\Users\\" + user + "\\Desktop, VPN 10.239.81.84";
+        string san = FeedbackService.Sanitize(raw);
+        Check(!san.Contains("203.0.113.45") && san.Contains("8.8.8.8") && san.Contains("2001:4860:4860::8888") && !san.Contains("10.239.81.84")
+              && !san.Contains(machine) && !san.Contains("C:\\Users\\" + user) && san.Contains("<user>") && san.Contains("<máy>"),
+            "Sanitize: ẩn IP lạ, tên máy, tên người dùng, đường dẫn; giữ DNS công cộng", san);
+        string pub = FeedbackService.PublicSummary();
+        Check(pub.Contains("App:") && pub.Contains("Windows") && !pub.Contains(machine) && !pub.Contains("C:\\")
+              && !System.Text.RegularExpressions.Regex.IsMatch(pub, "\\b" + System.Text.RegularExpressions.Regex.Escape(user) + "\\b"),
+            "PublicSummary: không có tên máy / người dùng / đường dẫn", pub);
+        string timeLog = FeedbackService.Sanitize("15:00:01  Steam OK, Quyền Administrator: có, IPv6 fe80::1 và 2a0d:2a00:1::2");
+        Check(timeLog.Contains("15:00:01") && timeLog.Contains("Administrator") && !timeLog.Contains("fe80::1") && timeLog.Contains("2a0d:2a00:1::2"),
+            "Sanitize: giữ giờ và chữ Administrator, ẩn IPv6 lạ, giữ IPv6 DNS công cộng", timeLog);
+        string body = FeedbackService.BuildBody("Không vào được Steam ở 203.0.113.45", "", true, "15:00:01  Card " + machine + " ok");
+        Check(body.Contains("### Mô tả") && body.Contains("x.x.x.x") && !body.Contains("203.0.113.45") && body.Contains("### Thông tin hệ thống") && body.Contains("### Nhật ký") && !body.Contains(machine) && body.Contains(AppInfo.Version),
+            "BuildBody: đủ mục, đã ẩn thông tin");
+        string longBody = FeedbackService.BuildBody(new string('a', 20000), "", false, "");
+        Check(longBody.Length <= FeedbackService.MaxBodyChars + 40 && longBody.EndsWith("…(đã cắt bớt)"), "BuildBody: cắt bớt khi quá dài", longBody.Length.ToString());
+        string url = FeedbackService.BuildIssueUrl("Tiêu đề thử", body, "bug");
+        Check(url.StartsWith(FeedbackService.NewIssueUrl + "?title=") && url.Contains("&body=") && url.EndsWith("&labels=bug") && url.Length <= FeedbackService.MaxUrlChars, "BuildIssueUrl: đúng dạng, có nhãn", url.Length.ToString());
+        int b = url.IndexOf("&body=") + 6;
+        int e = url.IndexOf("&labels=");
+        string decoded = Uri.UnescapeDataString(url.Substring(b, e - b));
+        Check(decoded.Contains("### Mô tả") && decoded.Contains("x.x.x.x"), "BuildIssueUrl: nội dung giải mã đúng");
+        string hugeUrl = FeedbackService.BuildIssueUrl(new string('t', 300), new string('ư', 9000), "");
+        Check(hugeUrl.Length <= FeedbackService.MaxUrlChars && Uri.UnescapeDataString(hugeUrl).Contains("…(đã cắt bớt)"), "BuildIssueUrl: rút ngắn nội dung để không vượt giới hạn URL", hugeUrl.Length.ToString());
+        Check(FeedbackService.BuildIssueUrl("", "x", "").Contains(Uri.EscapeDataString("Phản hồi từ " + AppInfo.Name)), "BuildIssueUrl: tiêu đề mặc định khi trống");
     }
 
     // =====================================================================

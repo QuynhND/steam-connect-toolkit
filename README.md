@@ -43,6 +43,17 @@ Tuỳ chọn này lưu trong `config.json` (`ShowGuideOnStartup`).
 - **Phương án nâng cấp từ xa** (kiến trúc, manifest, hosting, an toàn, triển khai dần, quản trị nhiều máy): [docs/PHUONG-AN-NANG-CAP-TU-XA.md](docs/PHUONG-AN-NANG-CAP-TU-XA.md).
 - Trong app: Cài đặt → **Cập nhật từ xa** → nhập địa chỉ `latest.json` (https) → *Kiểm tra bản mới* → *Tải và cài đặt*. App xác minh SHA-256 (và chữ ký số nếu cấu hình), khôi phục DNS/VPN như khi thoát, rồi tự thay file hoặc chạy bộ cài im lặng và mở lại.
 
+## Phản hồi và báo lỗi
+
+Cài đặt → **Phản hồi và báo lỗi**: nhập mô tả, bấm *Tạo issue trên GitHub* → trình duyệt mở trang tạo issue của kho với tiêu đề và nội dung điền sẵn (mô tả, thông tin hệ thống, 20 dòng nhật ký gần nhất). Nội dung được lược bỏ địa chỉ IP (trừ DNS công cộng), tên máy, tên người dùng, đường dẫn cá nhân và không bao giờ chứa mật khẩu; bấm *Xem trước / sao chép* để kiểm tra trước khi gửi. App không chứa token GitHub nào; việc gửi do bạn thực hiện trong trình duyệt bằng tài khoản của mình. Mẫu issue (báo lỗi / góp ý) có sẵn trong `.github/ISSUE_TEMPLATE`.
+
+## Bảo mật khi đóng góp mã
+
+- `.gitignore` loại trừ dữ liệu chạy (`config.json`, `history.json`, `session.json`, `*.log`, `updates/`), khoá và chứng chỉ (`*.pfx`, `*.key`, `*.pem`), file môi trường.
+- `tools/check-secrets.ps1` quét khoá riêng, token GitHub/AWS, blob DPAPI, mật khẩu trong JSON (chặn) và email, đường dẫn cá nhân (cảnh báo). `release.ps1` chạy quét này trước khi đóng gói.
+- Hook `.githooks/pre-commit` chạy quét trên file đang stage; kích hoạt bằng `git config core.hooksPath .githooks`.
+- Commit dùng địa chỉ ẩn danh của GitHub (`<tên>@users.noreply.github.com`) để không lộ email cá nhân.
+
 ## Tab Cài đặt
 
 | Nhóm | Nội dung |
@@ -53,6 +64,7 @@ Tuỳ chọn này lưu trong `config.json` (`ShowGuideOnStartup`).
 | Kiểm tra DNS và Steam | Thời gian chờ DNS/HTTPS, số DNS đo song song, tự tắt DNS lỗi, mã quốc gia và số DNS tải tối đa khi tìm DNS công cộng. |
 | VPN | Ưu tiên SSTP cho VPN Gate; trạng thái và nút đặt khoá registry L2TP sau NAT; xoá tài khoản VPN đã lưu trong app. |
 | Cập nhật từ xa | Địa chỉ manifest `latest.json`, tự kiểm tra khi mở app (mỗi ngày một lần), kiểm tra bản mới, tải và cài đặt (xác minh SHA-256/chữ ký số, khôi phục DNS/VPN trước khi thay file hoặc chạy bộ cài im lặng). |
+| Phản hồi và báo lỗi | Tạo issue GitHub với nội dung điền sẵn đã ẩn thông tin cá nhân; xem trước / sao chép; xem issue đã có. |
 | Dữ liệu và nhật ký | Mở thư mục dữ liệu, mở `app.log`, **xuất/nhập cấu hình** (JSON, không chứa mật khẩu; nhập có kiểm tra hợp lệ và giữ tài khoản VPN hiện có), **xuất gói chẩn đoán** (zip gồm thông tin hệ thống, đầu ra `netsh`/`rasdial`, nhật ký, lịch sử, phiên, sao lưu DNS gốc, cấu hình đã lược mật khẩu, danh sách VPN) để gửi khi cần hỗ trợ; đặt lại cài đặt mặc định (không đụng DNS, tài khoản, lịch sử, sao lưu). |
 | Giới thiệu | Tên, phiên bản, tác giả, giấy phép, mô tả, nguồn dữ liệu; phiên bản Windows/.NET, quyền admin, đường dẫn file chạy và dữ liệu, khoá L2TP; mở README/LICENSE; sao chép thông tin hệ thống. |
 

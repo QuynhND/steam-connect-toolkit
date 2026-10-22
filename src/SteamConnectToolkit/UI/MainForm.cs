@@ -77,6 +77,10 @@ namespace SteamConnectToolkit.UI
         private Label _lblDataDir, _lblNatT, _lblVpnCreds, _lblSystemInfo;
         private bool _guideOpen;
 
+        // Phản hồi
+        private TextBox _txtFeedback;
+        private CheckBox _chkFeedbackSystem;
+
         // Cập nhật từ xa
         private TextBox _txtUpdateUrl;
         private CheckBox _chkUpdateAuto;
@@ -191,6 +195,28 @@ namespace SteamConnectToolkit.UI
                 FlowRow(SettingsLabel("Địa chỉ manifest (latest.json, https):"), _txtUpdateUrl, _chkUpdateAuto),
                 FlowRow(_btnCheckUpdate, _btnInstallUpdate, _lblUpdateStatus));
 
+            // --- Phản hồi / báo lỗi ---
+            var grpFeedback = new GroupBox { Text = "Phản hồi và báo lỗi (tạo issue trên GitHub)", Dock = DockStyle.Fill, Padding = new Padding(10, 4, 10, 4), Margin = new Padding(0, 0, 0, 8) };
+            var tFb = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Margin = new Padding(0) };
+            tFb.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+            tFb.RowStyles.Add(new RowStyle(SizeType.Absolute, 62));
+            tFb.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+            var lblFb = new Label
+            {
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Text = "Mô tả vấn đề hoặc góp ý (dòng đầu làm tiêu đề). Cần tài khoản GitHub; nội dung điền sẵn đã ẩn IP, tên máy, tên người dùng – không có mật khẩu."
+            };
+            _txtFeedback = new TextBox { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Vertical, Margin = new Padding(0, 2, 0, 4) };
+            _chkFeedbackSystem = new CheckBox { Text = "Kèm thông tin hệ thống và 20 dòng nhật ký gần nhất", AutoSize = true, Checked = true, Margin = new Padding(8, 7, 0, 0) };
+            var btnFbIssue = ToolButton("Tạo issue trên GitHub (mở trình duyệt)", BtnFeedbackIssue_Click, 260);
+            var btnFbCopy = ToolButton("Xem trước / sao chép nội dung", BtnFeedbackCopy_Click, 210);
+            var btnFbList = ToolButton("Xem issue đã có", (s, e) => OpenUrl(FeedbackService.IssuesUrl), 130);
+            tFb.Controls.Add(lblFb, 0, 0);
+            tFb.Controls.Add(_txtFeedback, 0, 1);
+            tFb.Controls.Add(FlowRow(btnFbIssue, btnFbCopy, btnFbList, _chkFeedbackSystem), 0, 2);
+            grpFeedback.Controls.Add(tFb);
+
             // --- Dữ liệu & nhật ký ---
             _lblDataDir = new Label { AutoSize = true, ForeColor = Color.DimGray, Margin = new Padding(0, 6, 0, 0), Text = "Thư mục dữ liệu: " + AppPaths.DataDir };
             _btnOpenData2 = ToolButton("Mở thư mục dữ liệu", BtnOpenData_Click, 160);
@@ -235,6 +261,7 @@ namespace SteamConnectToolkit.UI
             AddSettingsGroup(root, grpCheck, 122);
             AddSettingsGroup(root, grpVpn, 122);
             AddSettingsGroup(root, grpUpdate, 122);
+            AddSettingsGroup(root, grpFeedback, 156);
             AddSettingsGroup(root, grpData, 158);
             AddSettingsGroup(root, grpAbout, 224);
             scroller.Controls.Add(root);
@@ -310,6 +337,54 @@ namespace SteamConnectToolkit.UI
         {
             try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
             catch (Exception ex) { LogError("Không mở được " + url + ": " + ex.Message); }
+        }
+
+        private string RecentLogLines(int count)
+        {
+            var lines = _rtbLog.Lines;
+            int start = Math.Max(0, lines.Length - count);
+            var sb = new StringBuilder();
+            for (int i = start; i < lines.Length; i++)
+                if (lines[i].Trim().Length > 0) sb.AppendLine(lines[i]);
+            return sb.ToString();
+        }
+
+        private string FeedbackTitle()
+        {
+            string first = (_txtFeedback.Text ?? "").Split('\n')[0].Trim();
+            if (first.Length == 0) return "";
+            return first.Length > 100 ? first.Substring(0, 100) : first;
+        }
+
+        private string FeedbackBody()
+        {
+            bool inc = _chkFeedbackSystem.Checked;
+            return FeedbackService.BuildBody(_txtFeedback.Text, "", inc, inc ? RecentLogLines(20) : "");
+        }
+
+        private void BtnFeedbackIssue_Click(object sender, EventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(_txtFeedback.Text))
+            {
+                Notice("Hãy mô tả ngắn vấn đề hoặc góp ý trước khi tạo issue.", NoticeKind.Warning);
+                _txtFeedback.Focus();
+                return;
+            }
+            string url = FeedbackService.BuildIssueUrl(FeedbackTitle(), FeedbackBody(), "");
+            OpenUrl(url);
+            Log("Đã mở trang tạo issue trên GitHub với nội dung điền sẵn (đã ẩn IP/tên máy). Đăng nhập GitHub rồi bấm Submit để gửi.");
+            Notice("Trình duyệt đã mở trang tạo issue; kiểm tra nội dung rồi bấm Submit new issue.", NoticeKind.Info);
+        }
+
+        private void BtnFeedbackCopy_Click(object sender, EventArgs e)
+        {
+            string text = "Tiêu đề: " + FeedbackTitle() + Environment.NewLine + Environment.NewLine + FeedbackBody();
+            try
+            {
+                Clipboard.SetText(text);
+                MessageBox.Show(this, text, "Nội dung sẽ gửi (đã sao chép vào clipboard)", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex) { LogError("Không sao chép được: " + ex.Message); }
         }
 
         private void BtnCopySys_Click(object sender, EventArgs e)

@@ -41,6 +41,12 @@ if (-not $SkipTests) {
     if ($LASTEXITCODE -ne 0) { throw "Tự kiểm thử thất bại – không phát hành" }
 }
 
+# 2b. Quét thông tin nhạy cảm trong toàn bộ file được theo dõi (chặn nếu có khoá/token/mật khẩu)
+if (Test-Path (Join-Path $root "tools\check-secrets.ps1")) {
+    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "tools\check-secrets.ps1") -All
+    if ($LASTEXITCODE -ne 0) { throw "Phát hiện thông tin nhạy cảm – không phát hành" }
+}
+
 # 3. Thông tin phiên bản
 $exe = Join-Path $dist "SteamConnectToolkit.exe"
 $version = (Get-Item $exe).VersionInfo.ProductVersion.Trim()
