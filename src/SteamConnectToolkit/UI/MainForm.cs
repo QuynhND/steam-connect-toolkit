@@ -1131,7 +1131,7 @@ namespace SteamConnectToolkit.UI
             RefreshAdapters();
             UpdateBackupStatus();
 
-            Log("Steam Connect Toolkit 1.0 – tác giả Quynh Nguyen – đang chạy với quyền Administrator. Thư mục dữ liệu: " + AppPaths.DataDir);
+            Log(AppInfo.Name + " " + AppInfo.Version + " – tác giả " + AppInfo.Author + " – đang chạy với quyền Administrator. Thư mục dữ liệu: " + AppPaths.DataDir);
             Log("Tên miền kiểm tra: " + string.Join(", ", SteamChecker.Domains));
             Log("Card mạng được chọn mặc định: " + string.Join(", ", GetCheckedAdapters().Select(a => a.Name)));
             UpdateVpnButtons();
@@ -1198,9 +1198,10 @@ namespace SteamConnectToolkit.UI
             _config.LastUpdateCheck = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
             SaveConfig();
             UI(UpdateUpdateStatus);
-            if (!r.Ok) LogWarn("Kiểm tra bản mới: " + r.Error);
-            else if (!r.UpdateAvailable) Log("Cập nhật: đang dùng bản mới nhất (" + cur.ToString(3) + ").");
-            else LogWarn("Cập nhật: có bản " + r.Manifest.Version + (r.Mandatory ? " (bắt buộc)" : "") + (string.IsNullOrEmpty(r.Manifest.Notes) ? "" : " – " + r.Manifest.Notes));
+            string via = string.IsNullOrEmpty(r.Source) || r.Source == "manifest" ? "" : " [nguồn: " + r.Source + "]";
+            if (!r.Ok) LogWarn("Kiểm tra bản mới (đang dùng " + cur.ToString(3) + ", " + url + "): " + r.Error);
+            else if (!r.UpdateAvailable) Log("Cập nhật: đang dùng bản mới nhất (" + cur.ToString(3) + ")" + via + ".");
+            else LogWarn("Cập nhật: có bản " + r.Manifest.Version + (r.Mandatory ? " (bắt buộc)" : "") + via + (string.IsNullOrEmpty(r.Manifest.Notes) ? "" : " – " + r.Manifest.Notes));
             return r;
         }
 

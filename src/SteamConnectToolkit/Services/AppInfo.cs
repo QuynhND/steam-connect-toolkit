@@ -15,7 +15,9 @@ namespace SteamConnectToolkit.Services
         public const string Author = "Quynh Nguyen";
         public const string License = "MIT License";
         public const string Copyright = "© 2026 Quynh Nguyen";
-        public const string RepositoryUrl = "https://github.com/QuynhND/steam-connect-toolkit";
+        /// <summary>owner/repo trên GitHub – dùng cho địa chỉ kho, trang phát hành và API cập nhật.</summary>
+        public const string RepositorySlug = "QuynhND/steam-connect-toolkit";
+        public const string RepositoryUrl = "https://github.com/" + RepositorySlug;
         public const string ReleasesUrl = RepositoryUrl + "/releases";
         public const string Description =
             "Kiểm tra kết nối Steam (DNS + HTTPS), đổi DNS IPv4/IPv6 sang DNS công cộng có sao lưu và thu hồi, " +

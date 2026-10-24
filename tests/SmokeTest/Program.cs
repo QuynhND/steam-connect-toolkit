@@ -505,6 +505,11 @@ internal static class Program
         Check(live.Ok ? (live.Latest >= new Version(1, 0, 0, 0) && live.Package != null && live.Package.Url.StartsWith(AppInfo.ReleasesUrl + "/download/", StringComparison.Ordinal))
                       : live.Error.Contains("404"),
             "Manifest GitHub Releases (…/releases/latest/download/latest.json): có bản mới hoặc 404 khi chưa có Release nào", live.Ok ? live.Describe() : live.Error);
+
+        string ghErr;
+        var ghLive = UpdateService.ManifestFromGitHubApi(20000, out ghErr);
+        Check(ghLive != null && UpdateService.ParseVersion(ghLive.Version) >= new Version(1, 0, 3, 0) && ghLive.Portable != null && ghLive.Portable.Sha256.Length == 64,
+            "GitHub API dự phòng: Release mới nhất có SteamConnectToolkit.exe kèm SHA-256", ghLive != null ? ghLive.Version + " " + ghLive.Portable.Url : ghErr);
     }
 
     private static void TestLegacyMigration(string tmp)
@@ -987,6 +992,26 @@ internal static class Program
             "IsCheckDue: mỗi ngày một lần");
         Check(UpdateService.DefaultManifestUrl.StartsWith(AppInfo.ReleasesUrl + "/latest/download/", StringComparison.Ordinal) && UpdateService.IsAllowedUrl(UpdateService.DefaultManifestUrl),
             "DefaultManifestUrl: trỏ tới GitHub Releases (…/releases/latest/download/latest.json) qua https");
+
+        // Dự phòng khi Release không còn latest.json: dựng manifest từ GitHub API (trường digest = sha256 của asset)
+        string gh = "{\"tag_name\":\"v2.0.0\",\"draft\":false,\"prerelease\":false,\"published_at\":\"2026-11-01T10:00:00Z\",\"html_url\":\"https://github.com/x/y/releases/tag/v2.0.0\",\"body\":\"- Sửa lỗi A\\r\\n- Thêm B\\r\\n\\r\\n---\\r\\nSHA-256: xem SHA256SUMS.txt\",\"assets\":[{\"name\":\"SteamConnectToolkit-2.0.0-portable.zip\",\"browser_download_url\":\"https://github.com/x/y/releases/download/v2.0.0/z.zip\",\"size\":10,\"digest\":\"sha256:aa\"},{\"name\":\"SteamConnectToolkit.exe\",\"browser_download_url\":\"https://github.com/x/y/releases/download/v2.0.0/SteamConnectToolkit.exe\",\"size\":360448,\"digest\":\"sha256:ABCDEF0123\"},{\"name\":\"SteamConnectToolkit-Setup-2.0.0.exe\",\"browser_download_url\":\"https://github.com/x/y/releases/download/v2.0.0/SteamConnectToolkit-Setup-2.0.0.exe\",\"size\":1234567,\"digest\":\"sha256:0011\"}]}";
+        var gm = UpdateService.ManifestFromGitHubRelease(gh);
+        Check(gm.Version == "2.0.0" && gm.Published == "2026-11-01" && gm.Portable != null && gm.Portable.Sha256 == "ABCDEF0123" && gm.Portable.Size == 360448
+              && gm.Installer != null && gm.Installer.Sha256 == "0011" && gm.Notes == "- Sửa lỗi A\n- Thêm B" && gm.NotesUrl.EndsWith("v2.0.0"),
+            "GitHub API → manifest: phiên bản, ngày, exe/bộ cài kèm SHA-256 từ digest, ghi chú bỏ phần chân");
+        bool ghThrew = false;
+        try { UpdateService.ManifestFromGitHubRelease(gh.Replace("\"digest\":\"sha256:ABCDEF0123\"", "\"digest\":\"\"").Replace("\"digest\":\"sha256:0011\"", "\"digest\":\"\"")); }
+        catch (InvalidOperationException) { ghThrew = true; }
+        Check(ghThrew, "GitHub API → manifest: asset không có digest → từ chối (không tải file thiếu mã băm)");
+        ghThrew = false;
+        try { UpdateService.ManifestFromGitHubRelease(gh.Replace("\"draft\":false", "\"draft\":true")); } catch (InvalidOperationException) { ghThrew = true; }
+        Check(ghThrew, "GitHub API → manifest: bản nháp → từ chối");
+        ghThrew = false;
+        try { UpdateService.ManifestFromGitHubRelease("{\"tag_name\":\"abc\"}"); } catch (InvalidOperationException) { ghThrew = true; }
+        Check(ghThrew && UpdateService.IsDefaultGitHubManifest(" " + UpdateService.DefaultManifestUrl.ToUpperInvariant() + " ") && !UpdateService.IsDefaultGitHubManifest("https://x/latest.json")
+              && UpdateService.ShouldFallbackToApi(new InvalidOperationException("x")) && UpdateService.ShouldFallbackToApi(new WebException("404", WebExceptionStatus.ProtocolError))
+              && !UpdateService.ShouldFallbackToApi(new WebException("timeout", WebExceptionStatus.Timeout)),
+            "GitHub API: tag không hợp lệ → lỗi; chỉ dự phòng cho địa chỉ mặc định khi máy chủ trả lỗi hoặc nội dung hỏng");
 
         var rnd = new Random(7);
         var payload = new byte[5000];

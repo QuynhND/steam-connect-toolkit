@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -44,6 +45,8 @@ namespace SteamConnectToolkit.Services
         public bool Mandatory { get; set; }
         public bool UsesInstaller { get; set; }
         public UpdatePackage Package { get; set; }
+        /// <summary>"manifest" (latest.json) hoặc "GitHub API (…)" khi Release không còn latest.json.</summary>
+        public string Source { get; set; }
 
         public string Describe()
         {
@@ -62,6 +65,8 @@ namespace SteamConnectToolkit.Services
     {
         /// <summary>Địa chỉ manifest mặc định: file latest.json đính kèm GitHub Release mới nhất của kho (tools/publish-release.ps1 tải lên; GitHub chuyển hướng tới bản mới nhất).</summary>
         public const string DefaultManifestUrl = AppInfo.ReleasesUrl + "/latest/download/latest.json";
+        /// <summary>API GitHub cho Release mới nhất – dự phòng khi latest.json bị xoá khỏi Release; mã băm lấy từ trường digest của từng asset.</summary>
+        public const string GitHubLatestApiUrl = "https://api.github.com/repos/" + AppInfo.RepositorySlug + "/releases/latest";
         public const string ApplyArgument = "--apply-update";
         public const string AfterUpdateArgument = "--after-update";
         public const int CheckIntervalHours = 24;
@@ -121,6 +126,11 @@ namespace SteamConnectToolkit.Services
 
         public static string FetchText(string url, int timeoutMs)
         {
+            return FetchText(url, timeoutMs, null);
+        }
+
+        public static string FetchText(string url, int timeoutMs, string accept)
+        {
             if (!IsAllowedUrl(url)) throw new InvalidOperationException("Địa chỉ phải dùng https:// (hoặc file:// khi kiểm thử): " + url);
             var req = WebRequest.Create(url.Trim());
             req.Timeout = timeoutMs;
@@ -131,6 +141,7 @@ namespace SteamConnectToolkit.Services
                 http.ReadWriteTimeout = timeoutMs;
                 http.AllowAutoRedirect = true;
                 http.Headers["Cache-Control"] = "no-cache";
+                if (!string.IsNullOrEmpty(accept)) http.Accept = accept;
             }
             using (var resp = req.GetResponse())
             using (var sr = new StreamReader(resp.GetResponseStream(), Encoding.UTF8))
@@ -151,12 +162,127 @@ namespace SteamConnectToolkit.Services
             return m;
         }
 
+        /// <summary>Địa chỉ đang dùng có phải manifest mặc định trên GitHub Releases của kho không.</summary>
+        public static bool IsDefaultGitHubManifest(string url)
+        {
+            return url != null && string.Equals(url.Trim(), DefaultManifestUrl, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>Chỉ chuyển sang GitHub API khi máy chủ có trả lời (404/403…) hoặc nội dung hỏng; mất mạng thì không thử thêm cho khỏi chờ lâu.</summary>
+        public static bool ShouldFallbackToApi(Exception ex)
+        {
+            var web = ex as WebException;
+            if (web != null) return web.Status == WebExceptionStatus.ProtocolError;
+            return ex is InvalidOperationException;
+        }
+
+        /// <summary>Dựng manifest từ phản hồi GET /repos/{owner}/{repo}/releases/latest của GitHub (asset kèm digest sha256).</summary>
+        public static UpdateManifest ManifestFromGitHubRelease(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) throw new InvalidOperationException("Phản hồi GitHub API rỗng.");
+            Dictionary<string, object> root;
+            try { root = new JavaScriptSerializer().DeserializeObject(json) as Dictionary<string, object>; }
+            catch (Exception ex) { throw new InvalidOperationException("Phản hồi GitHub API không phải JSON hợp lệ: " + ex.Message); }
+            if (root == null) throw new InvalidOperationException("Phản hồi GitHub API không đúng dạng.");
+            string tag = JsonString(root, "tag_name");
+            if (ParseVersion(tag) == null) throw new InvalidOperationException("Release không có tag phiên bản hợp lệ: " + tag);
+            if (JsonBool(root, "draft") || JsonBool(root, "prerelease")) throw new InvalidOperationException("Release mới nhất là bản nháp/thử nghiệm.");
+            var m = new UpdateManifest
+            {
+                Version = tag.Trim().TrimStart('v', 'V'),
+                Published = TrimDate(JsonString(root, "published_at")),
+                Notes = TrimNotes(JsonString(root, "body")),
+                NotesUrl = JsonString(root, "html_url")
+            };
+            object assetsObj;
+            var assets = root.TryGetValue("assets", out assetsObj) ? assetsObj as object[] : null;
+            if (assets != null)
+            {
+                foreach (var a in assets)
+                {
+                    var asset = a as Dictionary<string, object>;
+                    if (asset == null) continue;
+                    string name = JsonString(asset, "name") ?? "";
+                    string url = JsonString(asset, "browser_download_url");
+                    string digest = JsonString(asset, "digest") ?? "";
+                    string sha = digest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase) ? digest.Substring(7).Trim() : null;
+                    // Không có mã băm → không dùng: Download() từ chối gói thiếu SHA-256
+                    if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(sha)) continue;
+                    var pkg = new UpdatePackage { Url = url, Sha256 = sha, Size = JsonLong(asset, "size") };
+                    if (string.Equals(name, "SteamConnectToolkit.exe", StringComparison.OrdinalIgnoreCase)) m.Portable = pkg;
+                    else if (name.StartsWith("SteamConnectToolkit-Setup-", StringComparison.OrdinalIgnoreCase) && name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) m.Installer = pkg;
+                }
+            }
+            if (m.Portable == null && m.Installer == null)
+                throw new InvalidOperationException("Release " + tag + " không có SteamConnectToolkit.exe hay bộ cài kèm mã băm SHA-256.");
+            return m;
+        }
+
+        /// <summary>Hỏi GitHub API về Release mới nhất; null kèm lỗi nếu không được.</summary>
+        public static UpdateManifest ManifestFromGitHubApi(int timeoutMs, out string error)
+        {
+            error = null;
+            try { return ManifestFromGitHubRelease(FetchText(GitHubLatestApiUrl, timeoutMs, "application/vnd.github+json")); }
+            catch (Exception ex) { error = ex.Message; return null; }
+        }
+
+        private static string JsonString(Dictionary<string, object> d, string key)
+        {
+            object v;
+            if (!d.TryGetValue(key, out v) || v == null) return null;
+            return Convert.ToString(v, CultureInfo.InvariantCulture);
+        }
+
+        private static bool JsonBool(Dictionary<string, object> d, string key)
+        {
+            object v;
+            return d.TryGetValue(key, out v) && v is bool && (bool)v;
+        }
+
+        private static long JsonLong(Dictionary<string, object> d, string key)
+        {
+            object v;
+            if (!d.TryGetValue(key, out v) || v == null) return 0;
+            try { return Convert.ToInt64(v, CultureInfo.InvariantCulture); }
+            catch (Exception) { return 0; }
+        }
+
+        private static string TrimDate(string iso)
+        {
+            return iso != null && iso.Length >= 10 ? iso.Substring(0, 10) : iso;
+        }
+
+        /// <summary>Ghi chú Release: bỏ phần chân "---" do script phát hành thêm, giới hạn độ dài cho hộp thoại.</summary>
+        private static string TrimNotes(string body)
+        {
+            if (string.IsNullOrWhiteSpace(body)) return null;
+            string s = body.Replace("\r\n", "\n").Trim();
+            int cut = s.IndexOf("\n---", StringComparison.Ordinal);
+            if (cut > 0) s = s.Substring(0, cut).Trim();
+            if (s.Length > 1500) s = s.Substring(0, 1500) + "…";
+            return s;
+        }
+
         public static UpdateCheckResult Check(string manifestUrl, Version current, bool installedCopy, int timeoutMs)
         {
             var r = new UpdateCheckResult { Current = current ?? new Version(0, 0, 0, 0) };
             try
             {
-                var m = ParseManifest(FetchText(manifestUrl, timeoutMs));
+                UpdateManifest m;
+                try
+                {
+                    m = ParseManifest(FetchText(manifestUrl, timeoutMs));
+                    r.Source = "manifest";
+                }
+                catch (Exception ex)
+                {
+                    if (!IsDefaultGitHubManifest(manifestUrl) || !ShouldFallbackToApi(ex)) throw;
+                    // latest.json không còn trên Release (bị xoá/đổi tên) → hỏi GitHub API, mã băm lấy từ digest của asset
+                    string apiErr;
+                    m = ManifestFromGitHubApi(timeoutMs, out apiErr);
+                    if (m == null) throw new InvalidOperationException(ex.Message + " (GitHub API dự phòng: " + apiErr + ")");
+                    r.Source = "GitHub API, Release không có latest.json";
+                }
                 r.Manifest = m;
                 r.Latest = ParseVersion(m.Version);
                 bool hasInstaller = m.Installer != null && !string.IsNullOrEmpty(m.Installer.Url);

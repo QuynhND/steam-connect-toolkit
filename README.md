@@ -1,6 +1,6 @@
 # Steam Connect Toolkit
 
-**Tác giả:** Quynh Nguyen · **Giấy phép:** MIT · **Phiên bản:** 1.0.3 · *(tên cũ: Steam DNS Switcher)*
+**Tác giả:** Quynh Nguyen · **Giấy phép:** MIT · **Phiên bản:** 1.0.4 · *(tên cũ: Steam DNS Switcher)*
 
 Ứng dụng Windows 10/11 giúp **kiểm tra kết nối tới Steam**, **đổi DNS (IPv4 + IPv6)** sang các DNS công cộng và **thu hồi về nguyên trạng**, cùng **kết nối VPN** bằng VPN client có sẵn của Windows khi đổi DNS vẫn chưa đủ.
 

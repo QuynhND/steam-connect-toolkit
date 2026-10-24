@@ -1,5 +1,10 @@
 # Lịch sử phiên bản
 
+## 1.0.4 – 2026-10-24
+
+- Sửa lỗi: nếu file `latest.json` không còn trên Release (bị xoá hay đổi tên), app vẫn tìm được bản mới qua GitHub API và xác minh SHA-256 bằng mã băm do GitHub cung cấp.
+- Nhật ký ghi rõ phiên bản và địa chỉ khi kiểm tra bản mới lỗi; dòng khởi động ghi đúng số phiên bản.
+
 ## 1.0.3 – 2026-10-22
 
 - Nâng cấp từ xa chuyển sang GitHub Releases: địa chỉ manifest mặc định là `…/releases/latest/download/latest.json` của kho (GitHub tự chuyển hướng tới bản mới nhất); gói phát hành không còn nằm trong kho nguồn.
